@@ -25,7 +25,7 @@
 //! In other words, if we bit-reverse (over 32 bits) the operands, then we
 //! bit-reverse (over 64 bits) the result.
 
-use crate::{Block, Key, Tag};
+use crate::{Block, Key};
 use core::{
     convert::TryInto,
     num::Wrapping,
@@ -33,16 +33,17 @@ use core::{
 };
 use universal_hash::{consts::U16, NewUniversalHash, Output, UniversalHash};
 
+#[cfg(feature = "zeroize")]
+use zeroize::Zeroize;
+
 /// **POLYVAL**: GHASH-like universal hash over GF(2^128).
-#[allow(non_snake_case)]
 #[derive(Clone)]
-#[repr(align(16))]
 pub struct Polyval {
     /// GF(2^128) field element input blocks are multiplied by
-    H: U32x4,
+    h: U32x4,
 
     /// Field element representing the computed universal hash
-    S: U32x4,
+    s: U32x4,
 }
 
 impl NewUniversalHash for Polyval {
@@ -51,8 +52,8 @@ impl NewUniversalHash for Polyval {
     /// Initialize POLYVAL with the given `H` field element
     fn new(h: &Key) -> Self {
         Self {
-            H: h.into(),
-            S: U32x4::default(),
+            h: h.into(),
+            s: U32x4::default(),
         }
     }
 }
@@ -63,23 +64,34 @@ impl UniversalHash for Polyval {
     /// Input a field element `X` to be authenticated
     fn update(&mut self, x: &Block) {
         let x = U32x4::from(x);
-        self.S = (self.S + x) * self.H;
+        self.s = (self.s + x) * self.h;
     }
 
     /// Reset internal state
     fn reset(&mut self) {
-        self.S = U32x4::default();
+        self.s = U32x4::default();
     }
 
     /// Get POLYVAL result (i.e. computed `S` field element)
-    fn finalize(self) -> Tag {
+    fn finalize(self) -> Output<Self> {
         let mut block = Block::default();
 
-        for (chunk, i) in block.chunks_mut(4).zip(&[self.S.0, self.S.1, self.S.2, self.S.3]) {
+        for (chunk, i) in block
+            .chunks_mut(4)
+            .zip(&[self.s.0, self.s.1, self.s.2, self.s.3])
+        {
             chunk.copy_from_slice(&i.to_le_bytes());
         }
 
         Output::new(block)
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl Drop for Polyval {
+    fn drop(&mut self) {
+        self.h.zeroize();
+        self.s.zeroize();
     }
 }
 
@@ -218,6 +230,16 @@ impl Mul for U32x4 {
         }
 
         U32x4(zw[4], zw[5], zw[6], zw[7])
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl Zeroize for U32x4 {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+        self.1.zeroize();
+        self.2.zeroize();
+        self.3.zeroize();
     }
 }
 

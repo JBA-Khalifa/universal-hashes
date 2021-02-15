@@ -1,7 +1,7 @@
 //! **POLYVAL** is a GHASH-like universal hash over GF(2^128) useful for
 //! implementing [AES-GCM-SIV] or [AES-GCM/GMAC].
 //!
-//! From [RFC 8452 Section 3] which defines POLYVAL for use in AES-GCM_SIV:
+//! From [RFC 8452 Section 3] which defines POLYVAL for use in AES-GCM-SIV:
 //!
 //! > "POLYVAL, like GHASH (the authenticator in AES-GCM; ...), operates in a
 //! > binary field of size 2^128.  The field is defined by the irreducible
@@ -11,21 +11,23 @@
 //! input data data by a field element `H`, POLYVAL can be used to authenticate
 //! the message sequence as powers (in the finite field sense) of `H`.
 //!
-//! ## Requirements
+//! ## Minimum Supported Rust Version
 //!
-//! - Rust 1.41.0 or newer
-//! - Recommended: `RUSTFLAGS` with `-Ctarget-cpu` and `-Ctarget-feature`:
-//!   - x86(-64) CPU: `target-cpu=sandybridge` or newer
-//!   - SSE2 + SSE4.1: `target-feature=+sse2,+sse4.1`
+//! Rust *1.49* or higher.
+//!
+//! In the future the minimum supported Rust version may be changed, but it
+//! be will be accompanied with a minor version bump.
+//!
+//! ## Performance Notes
+//!
+//! On x86(-64) platforms, set `target-cpu` in `RUSTFLAGS` to `sandybridge` or
+//! newer for optimum performance:
 //!
 //! Example:
 //!
 //! ```text
-//! $ RUSTFLAGS="-Ctarget-cpu=native -Ctarget-feature=+sse2,+sse4.1" cargo bench
+//! $ RUSTFLAGS="-Ctarget-cpu=sandybridge" cargo bench
 //! ```
-//!
-//! If `RUSTFLAGS` are not provided, this crate will fall back to a much slower
-//! software-only implementation.
 //!
 //! ## Relationship to GHASH
 //!
@@ -49,45 +51,26 @@
 //! [RFC 8452 Appendix A]: https://tools.ietf.org/html/rfc8452#appendix-A
 
 #![no_std]
-#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg",
+    html_favicon_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg"
+)]
 #![warn(missing_docs, rust_2018_idioms)]
+
+mod backend;
+
+#[cfg(feature = "mulx")]
+mod mulx;
 
 pub use universal_hash;
 
-#[allow(unused_imports)]
-use cfg_if::cfg_if;
+pub use crate::backend::Polyval;
 
-#[cfg(not(all(
-    target_feature = "pclmulqdq",
-    target_feature = "sse2",
-    target_feature = "sse4.1",
-    any(target_arch = "x86", target_arch = "x86_64")
-)))]
-cfg_if! {
-    if #[cfg(target_pointer_width = "64")] {
-        mod u64_backend;
-        pub use u64_backend::Polyval;
-    } else {
-        mod u32_backend;
-        pub use u32_backend::Polyval;
-    }
-}
+#[cfg(feature = "mulx")]
+pub use crate::mulx::mulx;
 
-#[cfg(all(
-    target_feature = "pclmulqdq",
-    target_feature = "sse2",
-    target_feature = "sse4.1",
-    any(target_arch = "x86", target_arch = "x86_64")
-))]
-mod clmul_backend;
-
-#[cfg(all(
-    target_feature = "pclmulqdq",
-    target_feature = "sse2",
-    target_feature = "sse4.1",
-    any(target_arch = "x86", target_arch = "x86_64")
-))]
-pub use clmul_backend::Polyval;
+opaque_debug::implement!(Polyval);
 
 /// Size of a POLYVAL block in bytes
 pub const BLOCK_SIZE: usize = 16;

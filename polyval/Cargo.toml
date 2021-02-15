@@ -1,6 +1,6 @@
 [package]
 name = "polyval"
-version = "0.4.1"
+version = "0.5.0-pre"
 authors = ["RustCrypto Developers"]
 license = "Apache-2.0 OR MIT"
 description = """
@@ -15,12 +15,21 @@ categories = ["cryptography", "no-std"]
 edition = "2018"
 
 [dependencies]
-cfg-if = "0.1"
+opaque-debug = "0.3"
 universal-hash = { version = "0.4", default-features = false }
-zeroize = { version = "1", optional = true, default-features = false }
+zeroize = { version = "1.2", optional = true, default-features = false }
+
+[target.'cfg(any(target_arch = "x86_64", target_arch = "x86"))'.dependencies]
+cpuid-bool = "0.2"
 
 [dev-dependencies]
 hex-literal = "0.2"
 
 [features]
+force-soft = [] # Disable support for hardware intrinsics (CLMUL)
+mulx = []
 std = ["universal-hash/std"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
